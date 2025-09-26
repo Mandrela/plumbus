@@ -5,7 +5,10 @@ Supported items list:
  - if-else junctions
 
 TODO list:
- - variable assignments
+ - multiline strings
+ - elif
+ - variable assignments (including multiassignments)
+ - short variable names
  - for loop
  - while loop
  - function definitions
