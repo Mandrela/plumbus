@@ -97,7 +97,7 @@ def prepare_file(lines: list[str]) -> list[str]:
 	# open elif
 	# multiline string
 	# multiassignment
-	return lines
+	return [line for line in lines if line]
 
 
 def tokenize(line: str) -> list[str]:
@@ -179,33 +179,32 @@ def parse(lines: list[str], debug_file) -> str:
 			if linetype == "ifel":
 				if tokens[0] != "if":
 					raise Exception(f"Something wrong in ifel: {tokens[0]}")
+
 				condition = ' '.join(tokens[1:-1])
 				identcount = len(line) - len(line.strip())
-				print(f"condition: {condition}, ident: {identcount}")
+				# print(f"condition: {condition}, ident: {identcount}")
 
 				debug_file.write(f"{linetype}{identcount}:\t{line}\n")
 
 				else_index = _ + 1
-
-				#  and \
-#						(tokenize(lines[else_index])[0] != "else" or identcount != len(lines[else_index]) - len(lines[else_index].strip()))
-
-				while else_index < len(lines) and identcount < len(lines[else_index]) - len(lines[else_index].strip()):
-					print(lines[else_index], len(lines[else_index]) - len(lines[else_index].strip()))
+				while else_index < len(lines) and identcount < len(lines[else_index]) - len(lines[else_index].strip()) and \
+						(lines[else_index].strip()[:4] != "else" or identcount != len(lines[else_index]) - len(lines[else_index].strip())):
+					# print(lines[else_index], len(lines[else_index]) - len(lines[else_index].strip()))
 					else_index += 1
-				print(tokenize(lines[else_index]))
+				# print("kek", else_index)
+				# print(tokenize(lines[else_index]))
 				else_index = min(else_index, len(lines) - 1)
 
 				else_line = "-0"
 				else_end_index = else_index
 				if lines[else_index] and tokenize(lines[else_index])[0] == "else" and identcount == len(lines[else_index]) - len(lines[else_index].strip()):
-					print(f"supplying else, ident: {identcount}")
+					# print(f"supplying else, ident: {identcount}")
 
 					debug_file.write(f"else{identcount}:\t{lines[else_index]}\n")
 
 					else_end_index += 1
 					while else_end_index < len(lines) and identcount <  len(lines[else_end_index]) - len(lines[else_end_index].strip()):
-						print(lines[else_end_index], len(lines[else_end_index]) - len(lines[else_end_index].strip()))
+						# print(lines[else_end_index], len(lines[else_end_index]) - len(lines[else_end_index].strip()))
 						else_end_index += 1
 					else_line = parse(lines[else_index + 1:else_end_index], debug_file)
 
@@ -248,7 +247,9 @@ if __name__ == "__main__":
 '''
 Possible types:
 independant lines (done), variable assignment
-if-else junction (done), while loop, for loop
+if-else junction (done), while loop, for loop (break, continue)
 function definition, class definition, method definition
 imports
 '''
+
+# (lambda NoneFunc: )(lambda *_: None)
