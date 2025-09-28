@@ -3,9 +3,11 @@
 Supported items list:
  - independant lines
  - if-else junctions
+ - comments
+ - multiline strings
+ - line breaks
 
 TODO list:
- - multiline strings
  - elif
  - variable assignments (including multiassignments)
  - short variable names

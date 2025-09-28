@@ -57,17 +57,24 @@ class DebugFile:
 def normalize(line: str) -> str:
 	first_iteration = []
 	last_letter = ' '
-	# print(line)
-	for _ in range(len(line)):
+	string_env_s = False
+	string_env_d = False
+	for _ in range(len(line)): # delimits arithmetics not in string context
 		letter = line[_]
 		if letter == '#':
 			break
-		if letter in ARITHMETIC_OP and last_letter not in ARITHMETIC_OP:
+
+		if letter == "'" and not string_env_d:
+			string_env_s = not string_env_s
+		if letter == '"' and not string_env_s:
+			string_env_d = not string_env_d
+
+		if letter in ARITHMETIC_OP and last_letter not in ARITHMETIC_OP and not string_env_s and not string_env_d:
 			first_iteration.append(' ')
 
 		first_iteration.append(letter)
 
-		if letter in ARITHMETIC_OP and _ + 1 < len(line) and line[_ + 1] not in ARITHMETIC_OP:
+		if letter in ARITHMETIC_OP and _ + 1 < len(line) and line[_ + 1] not in ARITHMETIC_OP and not string_env_s and not string_env_d:
 			first_iteration.append(' ')
 
 		last_letter = letter
@@ -76,28 +83,72 @@ def normalize(line: str) -> str:
 	newline = []
 	identation = True
 	last_letter = ''
-	string_env = False
-	for letter in ''.join(first_iteration).rstrip():
-		if letter == "'" or \
-				letter == '"':
-			string_env = not string_env
+	string_env_s = False
+	string_env_d = False
+	for letter in ''.join(first_iteration).rstrip(): # removes extra characters
+		if letter == "'" and not string_env_d:
+			string_env_s = not string_env_s
+		if letter == '"' and not string_env_s:
+			string_env_d = not string_env_d
+
 		if letter not in " \t":
 			newline.append(letter)
 			identation = False
-		elif last_letter not in " \t" or identation or string_env:
+		elif last_letter not in " \t" or identation or string_env_s or string_env_d:
 			newline.append(letter)
+
 		last_letter = letter
 	# print(newline)
-	return ''.join(newline)
+	return ''.join(newline).rstrip()
 
 
 def prepare_file(lines: list[str]) -> list[str]:
-	lines = list(map(normalize, lines))
+	lines = [line[:line.find('#')] for line in lines]
+
+	_ = 0
+	while _ < len(lines):
+		if lines[_].strip() and lines[_].strip()[-1] == '\\':
+			lines[_] = lines[_].rstrip()[:-1] + ' ' + lines.pop(_ + 1).strip()
+			continue
+		if '\"\"\"' in lines[_] \
+				and "\'" in lines[_]:
+			string_env_s = False
+			string_env_d = False
+			i = 0
+			while i < len(lines[_]):
+				if lines[_][i] == "'" and not string_env_d:
+					string_env_s = not string_env_s
+				if lines[_][i] == '"' and not string_env_s:
+					string_env_d = not string_env_d
+
+				if lines[_][i:i+3] == '\"\"\"' and string_env_s:
+					lines[_] = lines[_][:i] + '\"\\\"\"' + lines[_][i + 3:]
+					i += 4
+				i += 1
+		_ += 1
+
+	_ = 0
+	while _ < len(lines):
+		if '\"\"\"' in lines[_]:
+
+			newline = lines[_].replace('\"\"\"', '"')
+			if lines[_].count('\"\"\"') % 2:
+				while '\"\"\"' not in lines[_ + 1]:
+					newline += '\\n' + lines.pop(_ + 1)
+				newline += '\\n' + lines.pop(_ + 1).replace('\"\"\"', '"', 1)
+			lines[_] = newline
+			continue
+		if lines[_].lstrip()[:4]  == "elif":
+			print("found elif")
+		print(lines[_])
+		_ += 1
+
 	# change var names
 	# open elif
+	# remove line breaks
 	# multiline string
 	# multiassignment
-	return [line for line in lines if line]
+	return [line for line in map(normalize, lines) if line]
 
 
 def tokenize(line: str) -> list[str]:
@@ -112,12 +163,15 @@ def tokenize(line: str) -> list[str]:
 
 	splitted_line = []
 	word = ""
-	string_env = False
+	string_env_s = False
+	string_env_d = False
 	for letter in line:
-		if letter == '"' or \
-				letter == "'":
-			string_env = not string_env
-		if letter not in " \t" or string_env:
+		if letter == '"' and not string_env_s:
+			string_env_d = not string_env_d
+		if letter == "'" and not string_env_d:
+			string_env_s = not string_env_s
+
+		if letter not in " \t" or string_env_s or string_env_d:
 			word += letter
 		elif last_letter not in " \t":
 			splitted_line.append(word)
@@ -127,6 +181,10 @@ def tokenize(line: str) -> list[str]:
 	if word:
 		splitted_line.append(word)
 	return splitted_line
+
+
+def compress(line: str) -> str: # unstripped but legit line on input
+	return line.strip()
 
 
 def determine_linetype(tokens: list[str]) -> str:
@@ -145,12 +203,6 @@ def determine_linetype(tokens: list[str]) -> str:
 	elif tokens[0] == "while":
 		return "while"
 	return "nil"
-
-
-def ifunsafe(char: str) -> str:
-	if char in UNSAFE_CHARACTERS:
-		return ' '
-	return ''
 
 
 def parse(lines: list[str], debug_file) -> str:
@@ -173,7 +225,7 @@ def parse(lines: list[str], debug_file) -> str:
 
 			if linetype == "nil":
 				debug_file.write(f"{linetype}:\t{line}\n")
-				line_buf.append(line.lstrip())
+				line_buf.append(compress(line))
 
 
 			if linetype == "ifel":
@@ -208,11 +260,9 @@ def parse(lines: list[str], debug_file) -> str:
 						else_end_index += 1
 					else_line = parse(lines[else_index + 1:else_end_index], debug_file)
 
-				ifelse_line = "(" + parse(lines[_ + 1:else_index], debug_file)
-				ifelse_line += ifunsafe(ifelse_line[-1]) + "if" + ifunsafe(condition[0]) + condition
-				ifelse_line += ifunsafe(condition[-1]) + "else" + ifunsafe(else_line[0]) + else_line + ")"
+				ifelse_line = "( " + parse(lines[_ + 1:else_index], debug_file) + " if "  + condition + " else " + else_line + " )"
 
-				line_buf.append(ifelse_line)
+				line_buf.append(compress(ifelse_line))
 				_ = else_end_index - 1
 
 			if linetype == "ass":
